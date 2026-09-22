@@ -1,0 +1,27 @@
+# 환경 변수 — 절대 커밋하지 않는다
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Node (vercel CLI 사용 시)
+node_modules/
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# 로그
+*.log
