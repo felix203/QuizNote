@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>사용법 — 퀴즈노트</title>
+  <meta name="description" content="퀴즈노트 사용법, 좋은 문제가 나오는 노트 작성 팁, 자주 묻는 질문과 오류 메시지 대응 방법." />
+  <link rel="icon" href="images/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('quiznote-theme');
+        if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <a href="#main" class="skip-link">본문으로 건너뛰기</a>
+
+  <header class="site-header">
+    <div class="container">
+      <a href="index.html" class="brand">
+        <span class="brand__mark">Q</span>
+        <span>퀴즈노트</span>
+      </a>
+
+      <div class="nav-right">
+        <nav class="nav" id="site-nav" aria-label="주요 메뉴">
+          <a href="index.html">홈</a>
+          <a href="quiz.html">퀴즈 만들기</a>
+          <a href="guide.html" aria-current="page">사용법</a>
+          <a href="about.html">소개</a>
+        </nav>
+
+        <button type="button" class="icon-btn" data-theme-toggle aria-label="다크 모드로 전환" aria-pressed="false">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        </button>
+
+        <button type="button" class="icon-btn nav-toggle" data-nav-toggle aria-label="메뉴 열기" aria-expanded="false" aria-controls="site-nav">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="section--tight">
+    <div class="container" style="max-width:820px;">
+      <h1>사용법</h1>
+      <p style="color:var(--text-muted);">처음이어도 1분이면 충분합니다.</p>
+
+      <!-- 단계별 -->
+      <section class="section--tight">
+        <h2>1. 이렇게 씁니다</h2>
+        <ol class="step-list">
+          <li>
+            <div>
+              <h3>노트를 텍스트로 준비합니다</h3>
+              <p>PPT라면 슬라이드 내용을 복사하고, 손필기라면 핵심만 옮겨 적으세요. 이미지나 PDF 업로드는 아직 지원하지 않습니다.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>한 번에 한 주제씩 넣습니다</h3>
+              <p>8주치를 한꺼번에 넣으면 문제가 얕아집니다. 챕터 하나 또는 강의 한 회차 분량이 가장 좋습니다.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>답을 가린 채 먼저 풀어봅니다</h3>
+              <p>정답은 접혀 있습니다. 5초라도 스스로 떠올려 본 뒤에 펼치는 것이 기억에 훨씬 오래 남습니다.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <h3>틀린 문제의 '노트 근거'를 찾아 읽습니다</h3>
+              <p>각 문제에는 노트 어느 부분에서 나왔는지가 함께 표시됩니다. 그 부분만 다시 읽으면 복습이 끝납니다.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- 노트 작성 팁 -->
+      <section class="section--tight">
+        <h2>2. 좋은 문제가 나오는 노트</h2>
+        <div class="grid grid--2">
+          <div class="card">
+            <h3 style="color:var(--accent)">✓ 이런 노트가 좋습니다</h3>
+            <ul style="margin:0;padding-left:20px;color:var(--text-muted);font-size:0.93rem;line-height:1.9;">
+              <li>개념의 <strong>정의</strong>가 문장으로 적혀 있다</li>
+              <li>A와 B를 <strong>비교</strong>한 내용이 있다</li>
+              <li>장단점, 예시, 조건이 함께 적혀 있다</li>
+              <li>용어와 설명이 짝지어져 있다</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3 style="color:var(--danger)">✕ 이런 노트는 아쉽습니다</h3>
+            <ul style="margin:0;padding-left:20px;color:var(--text-muted);font-size:0.93rem;line-height:1.9;">
+              <li>단어만 나열된 목차</li>
+              <li>수식이나 그림 위주라 텍스트가 거의 없다</li>
+              <li>"중요!!" 같은 표시만 있고 내용이 없다</li>
+              <li>여러 과목이 섞여 있다</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 오류 대응표 -->
+      <section class="section--tight">
+        <h2>3. 이런 메시지가 뜬다면</h2>
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div class="table-wrap">
+            <table class="data">
+              <thead>
+                <tr><th>메시지</th><th>원인</th><th>이렇게 해보세요</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>강의노트를 먼저 붙여넣어 주세요</td>
+                  <td>입력창이 비어 있음</td>
+                  <td>노트를 붙여넣거나 <strong>예시 노트 넣기</strong>를 눌러 체험해 보세요</td>
+                </tr>
+                <tr>
+                  <td>내용이 너무 짧아요</td>
+                  <td>30자 미만</td>
+                  <td>개념 설명이 담긴 문단을 조금 더 넣어 주세요</td>
+                </tr>
+                <tr>
+                  <td>노트가 너무 깁니다</td>
+                  <td>8,000자 초과</td>
+                  <td>챕터 단위로 나눠서 두세 번에 걸쳐 만들어 주세요</td>
+                </tr>
+                <tr>
+                  <td>요청이 몰리고 있어요</td>
+                  <td>API 호출 한도 초과 (429)</td>
+                  <td>30초 정도 기다렸다가 다시 시도해 주세요</td>
+                </tr>
+                <tr>
+                  <td>AI 서버가 응답하지 않습니다</td>
+                  <td>AI 서비스 장애 (5xx)</td>
+                  <td>잠시 후 다시 시도해 주세요. 입력한 노트는 지워지지 않습니다</td>
+                </tr>
+                <tr>
+                  <td>응답이 25초를 넘었습니다</td>
+                  <td>처리 지연 / 타임아웃</td>
+                  <td>노트를 줄이거나 문제 수를 10개 → 5개로 낮춰 보세요</td>
+                </tr>
+                <tr>
+                  <td>서버에 연결하지 못했습니다</td>
+                  <td>네트워크 끊김</td>
+                  <td>인터넷 연결을 확인한 뒤 다시 시도해 주세요</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="section--tight">
+        <h2>4. 자주 묻는 질문</h2>
+
+        <details class="faq">
+          <summary>제가 넣은 노트가 어딘가에 저장되나요?</summary>
+          <div class="faq__body">
+            <p>아니요. 퀴즈노트에는 데이터베이스가 없고, 서버 로그에도 노트 본문을 남기지 않습니다.
+            다만 문제를 만드는 과정에서 노트가 OpenAI 서버로 전송되므로,
+            <strong>개인정보나 회사·학교의 기밀 자료는 넣지 마세요.</strong></p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>영어 노트도 되나요?</summary>
+          <div class="faq__body">
+            <p>됩니다. 노트에 쓰인 언어를 그대로 따라가서, 영어 노트에는 영어 문제가 나옵니다.
+            한국어 문제로 받고 싶다면 노트 맨 위에 "한국어로 출제" 같은 문장을 한 줄 적어 두세요.</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>문제가 노트에 없는 내용으로 나왔어요.</summary>
+          <div class="faq__body">
+            <p>AI는 확률적으로 답을 만들기 때문에 드물게 노트 밖으로 나갈 수 있습니다.
+            그래서 각 문제에 <strong>노트 근거</strong>를 함께 표시합니다.
+            근거가 노트와 맞지 않는 문제는 그냥 넘기시면 됩니다.
+            노트가 짧을수록 이런 일이 잦아지니, 설명이 충분한 부분을 넣어 주세요.</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>같은 노트로 다시 만들면 같은 문제가 나오나요?</summary>
+          <div class="faq__body">
+            <p>아닙니다. 매번 조금씩 다른 문제가 나옵니다.
+            시험 전날 같은 범위를 두 번 돌려서 새 문제로 다시 확인해 보는 것도 좋은 방법입니다.</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>만든 문제를 저장할 수 있나요?</summary>
+          <div class="faq__body">
+            <p>결과 위쪽의 <strong>전체 복사</strong> 버튼으로 마크다운 텍스트를 클립보드에 담거나,
+            <strong>txt 저장</strong>으로 파일을 내려받을 수 있습니다.
+            브라우저 인쇄 기능을 쓰면 정답이 펼쳐진 상태로 PDF 저장도 됩니다.</p>
+          </div>
+        </details>
+
+        <details class="faq">
+          <summary>무료인가요?</summary>
+          <div class="faq__body">
+            <p>학습용으로 만든 개인 프로젝트라 이용료는 없습니다.
+            다만 AI 호출에는 실제 비용이 들기 때문에, 짧은 시간에 너무 많이 호출하면
+            일시적으로 제한 메시지가 뜰 수 있습니다.</p>
+          </div>
+        </details>
+      </section>
+
+      <div style="text-align:center;margin-top:36px;">
+        <a href="quiz.html" class="btn btn--primary">퀴즈 만들러 가기</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>© <span data-year>2026</span> 퀴즈노트(QuizNote) · 학습용 프로젝트</span>
+      <span>입력한 노트는 서버에 저장되지 않습니다.</span>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
