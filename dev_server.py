@@ -22,7 +22,31 @@ import os
 import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "api"))
+ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(ROOT, "api"))
+
+
+def load_dotenv():
+    """
+    프로젝트 루트의 .env 파일을 읽어 환경 변수로 넣는다. (외부 패키지 없이 직접 구현)
+    이미 셸에 설정된 값이 있으면 그 값을 우선한다.
+    """
+    path = os.path.join(ROOT, ".env")
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    print("· .env 파일을 불러왔습니다.")
+
+
+load_dotenv()
 
 from quiz import handle_request, MAX_BODY_BYTES  # noqa: E402
 
@@ -67,9 +91,16 @@ class DevHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("⚠️  OPENAI_API_KEY 가 설정되지 않았습니다. 화면은 뜨지만 퀴즈 생성은 500 오류가 납니다.\n")
+    if os.environ.get("OPENAI_API_KEY"):
+        base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        print(f"· API 주소: {base}")
+        print(f"· 모델: {os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')}")
+    else:
+        print("⚠️  OPENAI_API_KEY 가 설정되지 않았습니다. 화면은 뜨지만 퀴즈 생성은 500 오류가 납니다.")
 
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    print(f"▶ http://localhost:{PORT} 에서 실행 중입니다. (Ctrl+C 로 종료)")
-    ThreadingHTTPServer(("0.0.0.0", PORT), DevHandler).serve_forever()
+    os.chdir(ROOT)
+    print(f"\n▶ http://localhost:{PORT} 에서 실행 중입니다. (Ctrl+C 로 종료)")
+    try:
+        ThreadingHTTPServer(("0.0.0.0", PORT), DevHandler).serve_forever()
+    except KeyboardInterrupt:
+        print("\n서버를 종료합니다.")

@@ -441,7 +441,14 @@ async function handleSubmit(e) {
       };
       const fallback = ['문제가 발생했습니다.', ` 잠시 후 다시 시도해 주세요. (오류 코드 ${res.status})`];
       const [title, msg] = map[res.status] || fallback;
-      showAlert('error', title, (data && data.message ? ` ${data.message}` : msg));
+
+      // 서버가 구체적인 안내를 보냈다면 그것을 우선 보여준다.
+      // (같은 502라도 인증 실패인지 주소 오류인지 원인이 다르기 때문)
+      if (data && data.message) {
+        showAlert('error', data.message, '');
+      } else {
+        showAlert('error', title, msg);
+      }
       renderEmpty();
       return;
     }

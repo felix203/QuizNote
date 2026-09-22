@@ -22,8 +22,10 @@ Vercel Serverless Function (Python)
     실패     → { "ok": false, "error": "코드", "message": "사용자에게 보여줄 안내" }
 
 환경 변수
-    OPENAI_API_KEY  (필수)  OpenAI API 키
-    OPENAI_MODEL    (선택)  기본값 gpt-4o-mini
+    OPENAI_API_KEY   (필수)  API 키
+    OPENAI_BASE_URL  (선택)  기본값 https://api.openai.com/v1
+                             OpenAI 호환 프록시를 쓸 때 그 주소를 넣는다.
+    OPENAI_MODEL     (선택)  기본값 gpt-4o-mini
 """
 
 from http.server import BaseHTTPRequestHandler
@@ -42,8 +44,27 @@ MAX_COUNT = 10
 MAX_BODY_BYTES = 200_000          # 본문 크기 상한 (약 200KB)
 UPSTREAM_TIMEOUT = (5, 45)        # (연결 타임아웃, 읽기 타임아웃) 초
 
-OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-4o-mini"
+
+
+def chat_completions_url() -> str:
+    """
+    호출할 엔드포인트 주소를 만든다.
+
+    OpenAI 본사 API 대신 OpenAI 호환 프록시(사내/교육용 게이트웨이 등)를 쓰는 경우가 있어
+    베이스 주소를 환경 변수로 뺐다. OPENAI_BASE_URL 을 지정하지 않으면 OpenAI 본사로 간다.
+
+    예)
+        OPENAI_BASE_URL=https://api.openai.com/v1          → 본사
+        OPENAI_BASE_URL=https://example.com/v1             → 호환 프록시
+    """
+    base = (os.environ.get("OPENAI_BASE_URL") or DEFAULT_BASE_URL).strip().rstrip("/")
+
+    # 주소 끝에 이미 /chat/completions 까지 적어 둔 경우도 그대로 받아준다.
+    if base.endswith("/chat/completions"):
+        return base
+    return f"{base}/chat/completions"
 
 VALID_TYPES = ("multiple", "ox", "short")
 VALID_DIFFICULTY = ("easy", "normal", "hard")
@@ -234,55 +255,106 @@ def call_openai(params: dict) -> dict:
 
     model = os.environ.get("OPENAI_MODEL", DEFAULT_MODEL)
 
-    body = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": build_system_prompt(params["difficulty"], params["count"], params["types"])},
-            {"role": "user", "content": build_user_prompt(params["notes"], params["count"])},
-        ],
-        "response_format": {"type": "json_object"},
-        "temperature": 0.7,
-        "max_tokens": 2600,
+    url = chat_completions_url()
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
     }
 
-    try:
-        res = requests.post(
-            OPENAI_URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-            timeout=UPSTREAM_TIMEOUT,
-        )
-    except requests.exceptions.Timeout:
-        raise InputError(504, "upstream_timeout", "AI 응답이 너무 늦어졌습니다. 노트를 줄이거나 문제 수를 줄여 다시 시도해 주세요.")
-    except requests.exceptions.RequestException:
-        raise InputError(502, "upstream_unreachable", "AI 서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+    def body(json_mode: bool) -> dict:
+        b = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": build_system_prompt(params["difficulty"], params["count"], params["types"])},
+                {"role": "user", "content": build_user_prompt(params["notes"], params["count"])},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2600,
+        }
+        if json_mode:
+            # OpenAI JSON 모드. 호환 프록시 중에는 이 옵션을 모르는 곳이 있어 실패 시 빼고 재시도한다.
+            b["response_format"] = {"type": "json_object"}
+        return b
+
+    def post(json_mode: bool):
+        try:
+            return requests.post(url, headers=headers, json=body(json_mode), timeout=UPSTREAM_TIMEOUT)
+        except requests.exceptions.Timeout:
+            raise InputError(504, "upstream_timeout", "AI 응답이 너무 늦어졌습니다. 노트를 줄이거나 문제 수를 줄여 다시 시도해 주세요.")
+        except requests.exceptions.RequestException:
+            raise InputError(502, "upstream_unreachable", "AI 서버에 연결하지 못했습니다. 주소 설정과 네트워크를 확인해 주세요.")
+
+    res = post(True)
+
+    # response_format 을 지원하지 않는 서버라면 400을 준다. 한 번만 빼고 다시 시도한다.
+    if res.status_code == 400 and "response_format" in res.text:
+        print("[quiz] response_format 미지원으로 판단, JSON 모드 없이 재시도")
+        res = post(False)
 
     # --- 상태 코드별 처리 ---------------------------------------------------
-    if res.status_code == 401:
-        raise InputError(502, "upstream_auth", "AI 서비스 인증에 실패했습니다. 관리자에게 문의해 주세요.")
+    if res.status_code in (401, 403):
+        print(f"[quiz] auth {res.status_code} at {url}: {res.text[:200]}")
+        raise InputError(502, "upstream_auth", "AI 서비스 인증에 실패했습니다. API 키와 주소 설정을 확인해 주세요.")
+    if res.status_code == 404:
+        print(f"[quiz] 404 at {url}")
+        raise InputError(502, "upstream_not_found", "AI 서버 주소가 올바르지 않습니다. OPENAI_BASE_URL 설정을 확인해 주세요.")
     if res.status_code == 429:
         raise InputError(429, "rate_limited", "요청이 몰리고 있어요. 30초 정도 뒤에 다시 시도해 주세요.")
     if res.status_code >= 500:
+        print(f"[quiz] upstream {res.status_code} at {url}")
         raise InputError(502, "upstream_error", "AI 서버가 응답하지 않습니다. 잠시 후 다시 시도해 주세요.")
     if res.status_code >= 400:
-        # 400대 나머지 (잘못된 모델명, 컨텍스트 초과 등). 내부 메시지는 노출하지 않는다.
-        print(f"[quiz] openai {res.status_code}: {res.text[:300]}")
-        raise InputError(502, "upstream_bad_request", "AI 요청이 거부되었습니다. 노트를 조금 줄여 다시 시도해 주세요.")
+        # 400대 나머지 (잘못된 모델명, 컨텍스트 초과 등). 내부 메시지는 화면에 노출하지 않는다.
+        print(f"[quiz] upstream {res.status_code} at {url}: {res.text[:300]}")
+        raise InputError(502, "upstream_bad_request", "AI 요청이 거부되었습니다. 모델 이름과 노트 길이를 확인해 주세요.")
 
     # --- 본문 파싱 ----------------------------------------------------------
     try:
         content = res.json()["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
     except (ValueError, KeyError, IndexError, TypeError):
+        print(f"[quiz] 예상과 다른 응답 구조: {res.text[:300]}")
         raise InputError(502, "bad_upstream_json", "AI 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.")
 
+    parsed = extract_json(content)
     if not isinstance(parsed, dict):
+        print(f"[quiz] JSON 추출 실패: {str(content)[:300]}")
         raise InputError(502, "bad_upstream_json", "AI 응답 형식이 올바르지 않습니다. 다시 시도해 주세요.")
 
     return parsed
+
+
+def extract_json(content: str):
+    """
+    모델 응답에서 JSON 객체를 꺼낸다.
+
+    JSON 모드를 쓰면 보통 본문 전체가 JSON이지만, 프록시가 JSON 모드를 지원하지 않으면
+    ```json ... ``` 코드블록으로 감싸서 오거나 앞뒤에 설명이 붙어 오기도 한다.
+    그래서 그대로 파싱해 보고, 실패하면 가장 바깥 중괄호 구간만 잘라 다시 시도한다.
+    """
+    if not isinstance(content, str):
+        return None
+
+    text = content.strip()
+
+    # ```json ... ``` 코드블록 벗기기
+    if text.startswith("```"):
+        text = text.split("```")[1] if len(text.split("```")) > 1 else text
+        if text.lstrip().lower().startswith("json"):
+            text = text.lstrip()[4:]
+        text = text.strip()
+
+    try:
+        return json.loads(text)
+    except ValueError:
+        pass
+
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        try:
+            return json.loads(text[start : end + 1])
+        except ValueError:
+            return None
+    return None
 
 
 # ---------------------------------------------------------------------------

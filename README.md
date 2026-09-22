@@ -125,8 +125,15 @@ OpenAI Chat Completions API
 
 | 이름 | 필수 | 설명 | 예시 |
 |---|:---:|---|---|
-| `OPENAI_API_KEY` | ✅ | OpenAI API 키 | `sk-proj-xxxxxxxx...` |
+| `OPENAI_API_KEY` | ✅ | API 키 | `sk-proj-xxxxxxxx...` |
+| `OPENAI_BASE_URL` | ❌ | API 서버 주소. 비우면 `https://api.openai.com/v1` | `https://프록시주소/v1` |
 | `OPENAI_MODEL` | ❌ | 사용할 모델. 비우면 `gpt-4o-mini` | `gpt-4o-mini` |
+
+> **OpenAI 호환 프록시를 쓰는 경우**
+> 학교·회사에서 제공하는 게이트웨이처럼 OpenAI와 같은 규격이지만 주소만 다른 서버를 쓴다면
+> `OPENAI_BASE_URL` 에 그 주소(보통 `.../v1` 까지)를 넣으세요.
+> 코드가 뒤에 `/chat/completions` 를 붙여 호출합니다.
+> 주소를 지정하지 않으면 OpenAI 본사로 가고, 본사 키가 아니면 `invalid_api_key` 로 거부됩니다.
 
 ### 1) 키 발급
 
@@ -143,14 +150,18 @@ OpenAI Chat Completions API
 cp .env.example .env
 ```
 
-또는 셸에서 직접 지정합니다.
+`dev_server.py` 는 실행할 때 이 `.env` 파일을 자동으로 읽습니다.
+또는 셸에서 직접 지정해도 됩니다. (셸 값이 `.env` 보다 우선합니다)
 
 ```bash
 # macOS / Linux
 export OPENAI_API_KEY="sk-..."
 
-# Windows PowerShell
+# Windows PowerShell — export 가 아니라 $env: 입니다
 $env:OPENAI_API_KEY="sk-..."
+
+# Windows 명령 프롬프트(cmd)
+set OPENAI_API_KEY=sk-...
 ```
 
 > `.env` 는 `.gitignore` 에 등록되어 있어 커밋되지 않습니다.
@@ -353,7 +364,10 @@ git push
 | 배포 후 500 오류 | 환경 변수 미등록 | Vercel Settings 에 `OPENAI_API_KEY` 추가 후 **Redeploy** |
 | 환경 변수를 넣었는데도 500 | 재배포를 하지 않음 | Deployments → ⋯ → Redeploy |
 | `/api/quiz` 404 | 파일 위치가 잘못됨 | `api/quiz.py` 경로와 `handler` 클래스 이름 확인 |
+| `invalid_api_key` | 키가 해당 서버의 것이 아님 | 키 발급처와 `OPENAI_BASE_URL` 이 짝이 맞는지 확인 |
 | 502 인증 실패 | 키가 잘못됐거나 폐기됨 | 키 재발급 후 환경 변수 교체 |
+| 주소가 올바르지 않다는 안내 (404) | `OPENAI_BASE_URL` 경로 오류 | `.../v1` 까지만 넣었는지 확인 |
+| PowerShell에서 `export` 오류 | bash 문법을 씀 | `$env:이름="값"` 으로 지정 |
 | 429 | 무료 크레딧 소진 또는 호출 과다 | OpenAI Billing 확인, 잠시 후 재시도 |
 | 로컬은 되는데 배포는 안 됨 | 로컬 `.env` 값만 있고 Vercel 에 없음 | Vercel 환경 변수 등록 |
 | 함수 타임아웃 | 노트가 너무 길거나 문제 수가 많음 | 노트를 줄이거나 `vercel.json` 의 `maxDuration` 조정 |
