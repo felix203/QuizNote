@@ -95,6 +95,7 @@ if __name__ == "__main__":
         base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
         print(f"· API 주소: {base}")
         print(f"· 모델: {os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')}")
+        print(f"· 파라미터 조합: {os.environ.get('OPENAI_PARAM_STYLE') or '자동 탐색'}")
     else:
         print("⚠️  OPENAI_API_KEY 가 설정되지 않았습니다. 화면은 뜨지만 퀴즈 생성은 500 오류가 납니다.")
 

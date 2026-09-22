@@ -128,6 +128,15 @@ OpenAI Chat Completions API
 | `OPENAI_API_KEY` | ✅ | API 키 | `sk-proj-xxxxxxxx...` |
 | `OPENAI_BASE_URL` | ❌ | API 서버 주소. 비우면 `https://api.openai.com/v1` | `https://프록시주소/v1` |
 | `OPENAI_MODEL` | ❌ | 사용할 모델. 비우면 `gpt-4o-mini` | `gpt-4o-mini` |
+| `OPENAI_PARAM_STYLE` | ❌ | 파라미터 조합 고정. 비우면 자동 탐색 | `gpt5` |
+
+> **모델마다 받는 파라미터가 다릅니다**
+> GPT-4 계열은 `max_tokens` 와 `temperature` 를 받지만, GPT-5 계열은
+> `max_completion_tokens` 를 쓰고 `temperature` 조절을 허용하지 않습니다.
+> 호환 프록시 중에는 `response_format`(JSON 모드) 자체를 모르는 곳도 있습니다.
+> 그래서 서버가 400을 주면 조합을 단계적으로 줄이며 자동으로 맞는 것을 찾습니다.
+> 터미널에 `'gpt5' 조합에서 성공` 이 뜨면 `OPENAI_PARAM_STYLE=gpt5` 로 고정해
+> 불필요한 실패 요청을 없앨 수 있습니다.
 
 > **OpenAI 호환 프록시를 쓰는 경우**
 > 학교·회사에서 제공하는 게이트웨이처럼 OpenAI와 같은 규격이지만 주소만 다른 서버를 쓴다면
@@ -365,6 +374,7 @@ git push
 | 환경 변수를 넣었는데도 500 | 재배포를 하지 않음 | Deployments → ⋯ → Redeploy |
 | `/api/quiz` 404 | 파일 위치가 잘못됨 | `api/quiz.py` 경로와 `handler` 클래스 이름 확인 |
 | `invalid_api_key` | 키가 해당 서버의 것이 아님 | 키 발급처와 `OPENAI_BASE_URL` 이 짝이 맞는지 확인 |
+| `unsupported_feature` / `Requested feature is not supported` | 모델이 안 받는 파라미터를 보냄 | 자동 재시도로 해결됨. 계속 실패하면 `OPENAI_MODEL` 이름 확인 |
 | 502 인증 실패 | 키가 잘못됐거나 폐기됨 | 키 재발급 후 환경 변수 교체 |
 | 주소가 올바르지 않다는 안내 (404) | `OPENAI_BASE_URL` 경로 오류 | `.../v1` 까지만 넣었는지 확인 |
 | PowerShell에서 `export` 오류 | bash 문법을 씀 | `$env:이름="값"` 으로 지정 |

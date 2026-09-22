@@ -26,6 +26,9 @@ Vercel Serverless Function (Python)
     OPENAI_BASE_URL  (선택)  기본값 https://api.openai.com/v1
                              OpenAI 호환 프록시를 쓸 때 그 주소를 넣는다.
     OPENAI_MODEL     (선택)  기본값 gpt-4o-mini
+    OPENAI_PARAM_STYLE (선택) full | gpt5 | gpt5-plain | minimal
+                             모델·서버가 받아주는 파라미터 조합을 고정한다.
+                             비워 두면 자동으로 찾아낸다.
 """
 
 from http.server import BaseHTTPRequestHandler
@@ -68,6 +71,61 @@ def chat_completions_url() -> str:
 
 VALID_TYPES = ("multiple", "ox", "short")
 VALID_DIFFICULTY = ("easy", "normal", "hard")
+
+# GPT-5 계열은 내부 추론에도 토큰을 쓰므로 넉넉히 잡는다.
+MAX_OUTPUT_TOKENS = 4000
+
+# 모델·서버마다 받아주는 선택 파라미터가 다르다. 위에서부터 시도하며 400이 나면 다음으로 넘어간다.
+#   full        : GPT-4 계열 표준 (temperature 조절 + max_tokens + JSON 모드)
+#   gpt5        : GPT-5 계열 — temperature 고정, max_completion_tokens 사용
+#   gpt5-plain  : 위에서 JSON 모드까지 뺀 것 (JSON 모드를 모르는 프록시용)
+#   minimal     : model 과 messages 만 — 어디서든 통하는 최소 조합
+VARIANTS = (
+    ("full", {
+        "response_format": {"type": "json_object"},
+        "temperature": 0.7,
+        "max_tokens": MAX_OUTPUT_TOKENS,
+    }),
+    ("gpt5", {
+        "response_format": {"type": "json_object"},
+        "max_completion_tokens": MAX_OUTPUT_TOKENS,
+    }),
+    ("gpt5-plain", {
+        "max_completion_tokens": MAX_OUTPUT_TOKENS,
+    }),
+    ("minimal", {}),
+)
+
+# 400 응답이 "이 파라미터는 못 받는다"는 뜻인지 판별하는 데 쓰는 단서들
+UNSUPPORTED_HINTS = (
+    "unsupported",
+    "not supported",
+    "unrecognized",
+    "unknown parameter",
+    "invalid_request_error",
+    "response_format",
+    "max_tokens",
+    "temperature",
+)
+
+
+def looks_unsupported(text: str) -> bool:
+    """400 응답이 파라미터 미지원 때문인지 어림잡는다. 맞으면 다른 조합으로 재시도할 근거가 된다."""
+    low = (text or "").lower()
+    return any(h in low for h in UNSUPPORTED_HINTS)
+
+
+def variant_list():
+    """
+    시도할 파라미터 조합 순서를 만든다.
+    OPENAI_PARAM_STYLE 로 특정 조합을 지정하면 그것을 맨 앞에 둔다.
+    (어떤 조합이 되는지 이미 알고 있다면 매번 실패 요청을 보낼 필요가 없다.)
+    """
+    pinned = (os.environ.get("OPENAI_PARAM_STYLE") or "").strip()
+    if not pinned:
+        return list(VARIANTS)
+    head = [v for v in VARIANTS if v[0] == pinned]
+    return head + [v for v in VARIANTS if v[0] != pinned] if head else list(VARIANTS)
 
 DIFFICULTY_GUIDE = {
     "easy": "용어의 정의와 사실 확인 위주로 낸다. 노트를 한 번 읽은 사람이 풀 수 있어야 한다.",
@@ -261,35 +319,39 @@ def call_openai(params: dict) -> dict:
         "Content-Type": "application/json",
     }
 
-    def body(json_mode: bool) -> dict:
-        b = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": build_system_prompt(params["difficulty"], params["count"], params["types"])},
-                {"role": "user", "content": build_user_prompt(params["notes"], params["count"])},
-            ],
-            "temperature": 0.7,
-            "max_tokens": 2600,
-        }
-        if json_mode:
-            # OpenAI JSON 모드. 호환 프록시 중에는 이 옵션을 모르는 곳이 있어 실패 시 빼고 재시도한다.
-            b["response_format"] = {"type": "json_object"}
-        return b
+    messages = [
+        {"role": "system", "content": build_system_prompt(params["difficulty"], params["count"], params["types"])},
+        {"role": "user", "content": build_user_prompt(params["notes"], params["count"])},
+    ]
 
-    def post(json_mode: bool):
+    def post(extra: dict):
+        b = {"model": model, "messages": messages}
+        b.update(extra)
         try:
-            return requests.post(url, headers=headers, json=body(json_mode), timeout=UPSTREAM_TIMEOUT)
+            return requests.post(url, headers=headers, json=b, timeout=UPSTREAM_TIMEOUT)
         except requests.exceptions.Timeout:
             raise InputError(504, "upstream_timeout", "AI 응답이 너무 늦어졌습니다. 노트를 줄이거나 문제 수를 줄여 다시 시도해 주세요.")
         except requests.exceptions.RequestException:
             raise InputError(502, "upstream_unreachable", "AI 서버에 연결하지 못했습니다. 주소 설정과 네트워크를 확인해 주세요.")
 
-    res = post(True)
+    # 서버마다 지원하는 선택 파라미터가 다르다.
+    # (예: GPT-5 계열은 max_tokens 대신 max_completion_tokens 를 쓰고 temperature 를 받지 않으며,
+    #  일부 호환 프록시는 response_format 자체를 모른다.)
+    # 어떤 파라미터가 문제인지 알려주지 않는 서버도 있어서, 조합을 단계적으로 줄이며 다시 시도한다.
+    variants = variant_list()
+    res = None
 
-    # response_format 을 지원하지 않는 서버라면 400을 준다. 한 번만 빼고 다시 시도한다.
-    if res.status_code == 400 and "response_format" in res.text:
-        print("[quiz] response_format 미지원으로 판단, JSON 모드 없이 재시도")
-        res = post(False)
+    for i, (name, extra) in enumerate(variants):
+        if i > 0:
+            print(f"[quiz] 400 응답 → '{name}' 조합으로 재시도")
+        res = post(extra)
+
+        if res.status_code == 400 and looks_unsupported(res.text) and i < len(variants) - 1:
+            continue  # 다음 조합으로
+
+        if res.status_code < 400 and i > 0:
+            print(f"[quiz] '{name}' 조합에서 성공. .env 에 OPENAI_PARAM_STYLE={name} 를 넣어두면 재시도 없이 바로 호출합니다.")
+        break
 
     # --- 상태 코드별 처리 ---------------------------------------------------
     if res.status_code in (401, 403):
@@ -306,7 +368,7 @@ def call_openai(params: dict) -> dict:
     if res.status_code >= 400:
         # 400대 나머지 (잘못된 모델명, 컨텍스트 초과 등). 내부 메시지는 화면에 노출하지 않는다.
         print(f"[quiz] upstream {res.status_code} at {url}: {res.text[:300]}")
-        raise InputError(502, "upstream_bad_request", "AI 요청이 거부되었습니다. 모델 이름과 노트 길이를 확인해 주세요.")
+        raise InputError(502, "upstream_bad_request", "AI 요청이 거부되었습니다. 모델 이름(OPENAI_MODEL)이 서버에서 허용된 것인지 확인해 주세요.")
 
     # --- 본문 파싱 ----------------------------------------------------------
     try:
