@@ -49,7 +49,7 @@
 |---|---|
 | 프론트엔드 | HTML5, CSS3, Vanilla JavaScript (ES6+) — 프레임워크·빌드 도구 없음 |
 | 백엔드 | Vercel Serverless Functions (Python 3.12, `BaseHTTPRequestHandler`) |
-| AI | OpenAI Chat Completions API (`gpt-4o-mini`, JSON 응답 모드) |
+| AI | OpenAI Chat Completions API (`gpt-5-mini`, JSON 응답 모드) |
 | HTTP 클라이언트 | `requests` |
 | 배포 | Vercel (GitHub 연동 자동 배포) |
 
