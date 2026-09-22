@@ -45,7 +45,12 @@ MAX_NOTES_LEN = 8000
 MIN_COUNT = 3
 MAX_COUNT = 10
 MAX_BODY_BYTES = 200_000          # 본문 크기 상한 (약 200KB)
-UPSTREAM_TIMEOUT = (5, 45)        # (연결 타임아웃, 읽기 타임아웃) 초
+# (연결 타임아웃, 읽기 타임아웃) 초
+# 세 겹의 제한 시간을 짧은 순서로 맞춰 둔다.
+#   업스트림 읽기 50초  <  프론트 55초  <  Vercel 함수 60초(vercel.json)
+# 이렇게 해야 우리가 먼저 끊고 원인이 담긴 안내를 돌려줄 수 있다.
+# 반대 순서면 Vercel이 함수를 죽여 버려서 사용자는 정체 모를 오류만 본다.
+UPSTREAM_TIMEOUT = (5, 50)
 
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-4o-mini"

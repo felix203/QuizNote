@@ -6,7 +6,12 @@
 /* ---- 상수 ---------------------------------------------------------------- */
 const MIN_LEN = 30;       // 최소 입력 길이
 const MAX_LEN = 8000;     // 최대 입력 길이 (백엔드와 동일하게 맞춘다)
-const TIMEOUT_MS = 25000; // 프론트 타임아웃. 백엔드(45초)보다 짧게 잡아 먼저 끊는다.
+// 프론트 타임아웃.
+// 백엔드의 업스트림 제한(50초)보다 살짝 길게 잡는다.
+// 그래야 백엔드가 먼저 끊고 원인이 담긴 안내를 돌려줄 수 있고,
+// 이 타이머는 백엔드 자체가 멈췄을 때의 최후 안전장치로만 작동한다.
+// 추론 모델(GPT-5 계열)은 문제 10개 생성에 40초 가까이 걸리기도 한다.
+const TIMEOUT_MS = 55000;
 
 const TYPE_LABEL = { multiple: '객관식', ox: 'OX', short: '주관식' };
 
@@ -89,10 +94,16 @@ function clearAlert() {
   notesEl.removeAttribute('aria-invalid');
 }
 
-/** 전송 중에는 버튼을 잠가 중복 호출(=중복 과금)을 막는다. */
+let elapsedTimer = null;
+
+/**
+ * 전송 중에는 버튼을 잠가 중복 호출(=중복 과금)을 막는다.
+ * 응답이 40초 넘게 걸리는 모델도 있어서, 경과 시간을 같이 보여준다.
+ * 아무 변화 없이 멈춰 있는 화면은 사용자가 "고장 났나" 하고 새로고침하게 만든다.
+ */
 function setLoading(on) {
   submitBtn.disabled = on;
-  submitLabel.textContent = on ? '문제 만드는 중…' : '퀴즈 생성하기';
+
   const sp = submitBtn.querySelector('.spinner');
   if (on && !sp) {
     const s = document.createElement('span');
@@ -101,6 +112,26 @@ function setLoading(on) {
   } else if (!on && sp) {
     sp.remove();
   }
+
+  clearInterval(elapsedTimer);
+
+  if (!on) {
+    submitLabel.textContent = '퀴즈 생성하기';
+    return;
+  }
+
+  const started = Date.now();
+  submitLabel.textContent = '문제 만드는 중… 0초';
+
+  elapsedTimer = setInterval(() => {
+    const sec = Math.floor((Date.now() - started) / 1000);
+    submitLabel.textContent = `문제 만드는 중… ${sec}초`;
+
+    // 오래 걸릴 때 한 번만 이유를 알려준다.
+    if (sec === 15 && !alertBox.querySelector('.alert')) {
+      showAlert('info', '조금만 기다려 주세요.', ' 문제를 꼼꼼히 만드는 중입니다. 보통 40초 안에 끝납니다.');
+    }
+  }, 1000);
 }
 
 /** 로딩 중 결과 영역에 보여줄 스켈레톤 */
@@ -136,6 +167,7 @@ function renderEmpty() {
 
 function renderResult(data) {
   lastResult = data;
+  clearAlert(); // 대기 중 띄웠던 안내 배너를 걷어낸다
   resultArea.innerHTML = '';
 
   const quizzes = Array.isArray(data.quizzes) ? data.quizzes : [];
@@ -407,7 +439,7 @@ async function handleSubmit(e) {
   setLoading(true);
   renderSkeleton(count);
 
-  // 실패 처리 ③ 타임아웃: AbortController 로 25초에서 직접 끊는다.
+  // 실패 처리 ③ 타임아웃: AbortController 로 직접 끊는다 (백엔드가 먼저 끊지 못했을 때의 안전장치).
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
