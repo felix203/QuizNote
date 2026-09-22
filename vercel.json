@@ -1,7 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
   "functions": {
-    "api/quiz.py": {
+    "api/**/*.py": {
       "maxDuration": 60
     }
   },
