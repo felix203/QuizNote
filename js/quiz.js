@@ -162,6 +162,106 @@ function renderEmpty() {
 }
 
 /* ==========================================================================
+   채점 상태
+   문항 번호(index) → { answered, correct } 로 기록한다.
+   서버에 보내지 않고 화면에서만 쓰는 값이라 별도 저장은 하지 않는다.
+   ========================================================================== */
+const answerState = new Map();
+let totalCount = 0;
+let scoreEls = null;
+
+/** 채점 비교용 정규화: 대소문자·공백·문장부호·괄호 설명을 걷어낸다. */
+function norm(s) {
+  return String(s == null ? '' : s)
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '')
+    .replace(/[\s.,·・/'"`~!?:;\-_[\]{}()]/g, '');
+}
+
+/**
+ * 모델이 준 정답 문자열이 몇 번 보기인지 찾는다.
+ * "Round Robin" 처럼 보기 원문일 수도, "3" 처럼 번호일 수도 있어서 세 단계로 확인한다.
+ * 어느 것도 못 찾으면 -1 (자동 채점 포기).
+ */
+function findAnswerIndex(choices, answer) {
+  const a = norm(answer);
+  if (!a) return -1;
+
+  // 1) 보기 원문과 완전히 같은 것
+  let i = choices.findIndex((c) => norm(c) === a);
+  if (i !== -1) return i;
+
+  // 2) "3", "3)", "3." 같은 번호 표기
+  const m = String(answer).trim().match(/^([1-9])[.)]?$/);
+  if (m) {
+    const idx = Number(m[1]) - 1;
+    if (idx >= 0 && idx < choices.length) return idx;
+  }
+
+  // 3) 한쪽이 다른 쪽을 포함 (보기에 부연 설명이 붙은 경우)
+  i = choices.findIndex((c) => {
+    const n = norm(c);
+    return n.length >= 2 && (n.includes(a) || a.includes(n));
+  });
+  return i;
+}
+
+/** 주관식 입력을 채점한다. correct / near / wrong / empty */
+function gradeShort(input, answer) {
+  const a = norm(answer);
+  const b = norm(input);
+  if (!b) return 'empty';
+  if (!a) return 'wrong';
+  if (a === b) return 'correct';
+  if (b.length >= 2 && (a.includes(b) || b.includes(a))) return 'near';
+  return 'wrong';
+}
+
+/** 상단 점수 막대를 만든다. */
+function buildScoreBar() {
+  const bar = document.createElement('div');
+  bar.className = 'score-bar';
+
+  const text = document.createElement('div');
+  text.className = 'score-bar__text';
+
+  const track = document.createElement('div');
+  track.className = 'score-bar__track';
+  const fill = document.createElement('div');
+  fill.className = 'score-bar__fill';
+  track.appendChild(fill);
+
+  bar.append(text, track);
+  scoreEls = { text, fill };
+  return bar;
+}
+
+/** 채점 상태가 바뀔 때마다 점수 막대를 갱신한다. */
+function updateScore() {
+  if (!scoreEls) return;
+
+  let answered = 0;
+  let correct = 0;
+  answerState.forEach((v) => {
+    if (v.answered) answered++;
+    if (v.correct) correct++;
+  });
+
+  const pct = totalCount ? Math.round((answered / totalCount) * 100) : 0;
+  scoreEls.fill.style.width = `${pct}%`;
+
+  if (answered === 0) {
+    scoreEls.text.textContent = `0 / ${totalCount} 문제 풀이 — 답을 골라보세요`;
+  } else if (answered < totalCount) {
+    scoreEls.text.textContent = `${answered} / ${totalCount} 문제 풀이 · 맞은 개수 ${correct}개`;
+  } else {
+    const rate = Math.round((correct / totalCount) * 100);
+    scoreEls.text.textContent = `완료 — ${totalCount}문제 중 ${correct}개 정답 (${rate}%)`;
+    scoreEls.fill.classList.add('is-done');
+  }
+}
+
+/* ==========================================================================
    결과 렌더링
    ========================================================================== */
 
@@ -169,6 +269,8 @@ function renderResult(data) {
   lastResult = data;
   clearAlert(); // 대기 중 띄웠던 안내 배너를 걷어낸다
   resultArea.innerHTML = '';
+  scoreEls = null;
+  answerState.clear(); // 새 문제 세트이므로 채점 기록을 비운다
 
   const quizzes = Array.isArray(data.quizzes) ? data.quizzes : [];
   if (quizzes.length === 0) {
@@ -203,32 +305,29 @@ function renderResult(data) {
   dlBtn.textContent = 'txt 저장';
   dlBtn.addEventListener('click', downloadTxt);
 
-  const openBtn = document.createElement('button');
-  openBtn.type = 'button';
-  openBtn.className = 'btn btn--ghost btn--sm';
-  openBtn.textContent = '정답 모두 보기';
-  openBtn.addEventListener('click', () => {
-    const boxes = resultArea.querySelectorAll('.answer-box');
-    const anyHidden = Array.from(boxes).some((b) => b.hidden);
-    boxes.forEach((b) => {
-      b.hidden = !anyHidden;
-      const tg = b.previousElementSibling;
-      if (tg && tg.classList.contains('answer-toggle')) {
-        tg.textContent = anyHidden ? '정답 · 해설 접기' : '정답 · 해설 보기';
-        tg.setAttribute('aria-expanded', String(anyHidden));
-      }
-    });
-    openBtn.textContent = anyHidden ? '정답 모두 접기' : '정답 모두 보기';
+  const resetBtn = document.createElement('button');
+  resetBtn.type = 'button';
+  resetBtn.className = 'btn btn--ghost btn--sm';
+  resetBtn.textContent = '전체 다시 풀기';
+  resetBtn.addEventListener('click', () => {
+    answerState.clear();
+    renderResult(data); // 같은 문제로 처음 상태부터 다시
   });
 
-  actions.append(copyBtn, dlBtn, openBtn);
+  actions.append(copyBtn, dlBtn, resetBtn);
   head.append(h, actions);
   resultArea.appendChild(head);
+
+  /* 점수 막대 */
+  totalCount = quizzes.length;
+  resultArea.appendChild(buildScoreBar());
 
   /* 문제 카드 */
   quizzes.forEach((q, i) => {
     resultArea.appendChild(buildCard(q, i));
   });
+
+  updateScore();
 
   resultArea.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
@@ -260,34 +359,10 @@ function buildCard(q, index) {
 
   card.append(top, question);
 
-  /* 보기 */
-  if (Array.isArray(q.choices) && q.choices.length > 0) {
-    const ul = document.createElement('ul');
-    ul.className = 'choices';
-    q.choices.forEach((c, ci) => {
-      const li = document.createElement('li');
-      const mark = document.createElement('span');
-      mark.className = 'mark';
-      mark.textContent = type === 'ox' ? String(c).trim().charAt(0) : `${ci + 1}.`;
-      const txt = document.createElement('span');
-      txt.textContent = type === 'ox' ? '' : String(c);
-      li.append(mark, txt);
-      ul.appendChild(li);
-    });
-    card.appendChild(ul);
-  }
-
-  /* 정답/해설 (기본은 접힘 — 인출 연습을 위해 일부러 가린다) */
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'answer-toggle';
-  toggle.textContent = '정답 · 해설 보기';
-  toggle.setAttribute('aria-expanded', 'false');
-
+  /* --- 정답/해설 상자 (채점 전까지 숨김) --- */
   const answerBox = document.createElement('div');
   answerBox.className = 'answer-box';
   answerBox.hidden = true;
-
   answerBox.appendChild(row('정답', q.answer || '—'));
   if (q.explanation) answerBox.appendChild(row('해설', q.explanation));
   if (q.evidence) {
@@ -296,14 +371,191 @@ function buildCard(q, index) {
     answerBox.appendChild(ev);
   }
 
-  toggle.addEventListener('click', () => {
-    answerBox.hidden = !answerBox.hidden;
-    toggle.textContent = answerBox.hidden ? '정답 · 해설 보기' : '정답 · 해설 접기';
-    toggle.setAttribute('aria-expanded', String(!answerBox.hidden));
+  /* --- 판정 결과 띠 --- */
+  const verdict = document.createElement('div');
+  verdict.className = 'verdict';
+  verdict.hidden = true;
+
+  /* --- 다시 풀기 --- */
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'retry-btn';
+  retry.textContent = '다시 풀기';
+  retry.hidden = true;
+
+  /** 채점이 끝났을 때 공통으로 하는 일 */
+  function settle(isCorrect, label) {
+    answerState.set(index, { answered: true, correct: isCorrect });
+    verdict.hidden = false;
+    verdict.className = `verdict verdict--${isCorrect ? 'correct' : 'wrong'}`;
+    verdict.textContent = label;
+    answerBox.hidden = false;
+    retry.hidden = false;
+    card.classList.add('is-answered');
+    updateScore();
+  }
+
+  if (type === 'short') {
+    /* ===== 주관식: 직접 입력 ===== */
+    const wrap = document.createElement('div');
+    wrap.className = 'short-answer';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '정답을 입력하세요';
+    input.setAttribute('aria-label', `${q.no || index + 1}번 문제 답안`);
+
+    const submit = document.createElement('button');
+    submit.type = 'button';
+    submit.className = 'btn btn--primary btn--sm';
+    submit.textContent = '확인';
+
+    const check = () => {
+      const result = gradeShort(input.value, q.answer);
+
+      if (result === 'empty') {
+        input.classList.add('is-invalid');
+        input.focus();
+        return;
+      }
+      input.classList.remove('is-invalid');
+      input.disabled = true;
+      submit.disabled = true;
+
+      if (result === 'correct') {
+        input.classList.add('is-correct');
+        settle(true, '✓ 정답입니다');
+      } else if (result === 'near') {
+        // 표현만 다를 뿐 같은 답일 수 있다 → 정답으로 인정하되 표기는 남긴다
+        input.classList.add('is-correct');
+        settle(true, '✓ 정답으로 인정 — 표현이 조금 다릅니다');
+      } else {
+        input.classList.add('is-wrong');
+        settle(false, '✕ 정답과 다릅니다');
+        // 채점은 글자 비교라 완벽하지 않다. 최종 판단은 사용자에게 맡긴다.
+        appendSelfCheck(card, verdict, index);
+      }
+    };
+
+    submit.addEventListener('click', check);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') check();
+    });
+
+    wrap.append(input, submit);
+    card.appendChild(wrap);
+  } else if (Array.isArray(q.choices) && q.choices.length > 0) {
+    /* ===== 객관식 / OX: 버튼으로 선택 ===== */
+    const correctIdx = findAnswerIndex(q.choices, q.answer);
+
+    const ul = document.createElement('ul');
+    ul.className = 'choices choices--interactive';
+
+    const buttons = [];
+
+    q.choices.forEach((c, ci) => {
+      const li = document.createElement('li');
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'choice';
+
+      const mark = document.createElement('span');
+      mark.className = 'mark';
+      mark.textContent = type === 'ox' ? String(c).trim().charAt(0) : `${ci + 1}`;
+
+      const txt = document.createElement('span');
+      txt.className = 'choice__text';
+      txt.textContent = type === 'ox' ? (String(c).trim().charAt(0) === 'O' ? '맞다' : '아니다') : String(c);
+
+      btn.append(mark, txt);
+
+      btn.addEventListener('click', () => {
+        if (answerState.get(index)?.answered) return; // 이미 푼 문제는 바꿀 수 없다
+
+        const isCorrect = correctIdx === -1 ? null : ci === correctIdx;
+
+        buttons.forEach((b, bi) => {
+          b.disabled = true;
+          if (bi === ci) b.classList.add(isCorrect === false ? 'is-wrong' : 'is-picked');
+          if (correctIdx !== -1 && bi === correctIdx) b.classList.add('is-answer');
+        });
+
+        if (isCorrect === null) {
+          // 보기와 정답 문자열이 맞아떨어지지 않는 드문 경우 — 정답을 보여주고 직접 판단하게 한다
+          answerBox.hidden = false;
+          verdict.hidden = false;
+          verdict.className = 'verdict verdict--neutral';
+          verdict.textContent = '정답을 확인해 주세요';
+          retry.hidden = false;
+          card.classList.add('is-answered');
+          appendSelfCheck(card, verdict, index);
+        } else {
+          settle(isCorrect, isCorrect ? '✓ 정답입니다' : '✕ 틀렸습니다');
+        }
+      });
+
+      buttons.push(btn);
+      li.appendChild(btn);
+      ul.appendChild(li);
+    });
+
+    card.appendChild(ul);
+  }
+
+  /* --- 모르겠으면 넘어가기 --- */
+  const skip = document.createElement('button');
+  skip.type = 'button';
+  skip.className = 'answer-toggle';
+  skip.textContent = '모르겠어요 · 정답 보기';
+  skip.addEventListener('click', () => {
+    if (answerState.get(index)?.answered) return;
+    card.querySelectorAll('.choice, .short-answer input, .short-answer button').forEach((el) => {
+      el.disabled = true;
+    });
+    skip.hidden = true;
+    settle(false, '— 넘어간 문제');
   });
 
-  card.append(toggle, answerBox);
+  card.append(skip, verdict, answerBox, retry);
+
+  /* 다시 풀기: 이 카드만 처음 상태로 되돌린다 */
+  retry.addEventListener('click', () => {
+    answerState.delete(index);
+    const fresh = buildCard(q, index);
+    card.replaceWith(fresh);
+    updateScore();
+  });
+
   return card;
+}
+
+/**
+ * 주관식 자동 채점이 틀렸다고 판단했을 때, 사용자가 직접 뒤집을 수 있게 한다.
+ * 글자 비교로는 "에이징"과 "aging(에이징)"을 같게 보기 어렵기 때문이다.
+ */
+function appendSelfCheck(card, verdict, index) {
+  const wrap = document.createElement('div');
+  wrap.className = 'self-check';
+
+  const label = document.createElement('span');
+  label.textContent = '직접 채점:';
+
+  const ok = document.createElement('button');
+  ok.type = 'button';
+  ok.className = 'btn btn--ghost btn--sm';
+  ok.textContent = '맞은 걸로';
+
+  ok.addEventListener('click', () => {
+    answerState.set(index, { answered: true, correct: true });
+    verdict.className = 'verdict verdict--correct';
+    verdict.textContent = '✓ 정답 (직접 채점)';
+    wrap.remove();
+    updateScore();
+  });
+
+  wrap.append(label, ok);
+  verdict.insertAdjacentElement('afterend', wrap);
 }
 
 function row(key, value) {

@@ -594,3 +594,146 @@ table.data tr:last-child td { border-bottom: none; }
   .answer-box[hidden] { display: block !important; }
   body { background: #fff; color: #000; }
 }
+
+/* ==========================================================================
+   문제 풀이 인터랙션 (객관식 버튼 선택 / 주관식 직접 입력)
+   ========================================================================== */
+
+/* 점수 막대 */
+.score-bar {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+.score-bar__text {
+  font-size: 0.9rem; font-weight: 600; color: var(--text-muted);
+  margin-bottom: 9px;
+}
+.score-bar__track {
+  height: 7px; border-radius: 99px;
+  background: var(--bg-subtle); overflow: hidden;
+}
+.score-bar__fill {
+  height: 100%; width: 0;
+  border-radius: 99px;
+  background: var(--brand);
+  transition: width 0.35s ease, background-color 0.35s ease;
+}
+.score-bar__fill.is-done { background: var(--accent); }
+
+/* 선택형 보기 버튼 */
+.choices--interactive { gap: 9px; }
+.choices--interactive li { display: block; padding: 0; background: none; border: none; }
+
+.choice {
+  display: flex; align-items: flex-start; gap: 11px;
+  width: 100%; text-align: left;
+  padding: 12px 15px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  font-size: 0.94rem; line-height: 1.5;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, transform 0.08s;
+}
+.choice:hover:not(:disabled) { border-color: var(--brand); background: var(--brand-soft); }
+.choice:active:not(:disabled) { transform: scale(0.995); }
+.choice:disabled { cursor: default; }
+
+.choice .mark {
+  flex: none;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--bg-subtle); color: var(--text-muted);
+  font-size: 0.78rem; font-weight: 700;
+  transition: background-color 0.15s, color 0.15s;
+}
+.choice:hover:not(:disabled) .mark { background: var(--brand); color: #fff; }
+html[data-theme="dark"] .choice:hover:not(:disabled) .mark { color: #121420; }
+
+.choice__text { flex: 1; }
+
+/* 채점 후 상태 */
+.choice.is-answer {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.choice.is-answer .mark { background: var(--accent); color: #fff; }
+html[data-theme="dark"] .choice.is-answer .mark { color: #0f221f; }
+.choice.is-answer .choice__text::after { content: " ← 정답"; font-size: 0.82rem; color: var(--accent); font-weight: 700; }
+
+.choice.is-wrong {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.choice.is-wrong .mark { background: var(--danger); color: #fff; }
+html[data-theme="dark"] .choice.is-wrong .mark { color: #2a121a; }
+.choice.is-wrong .choice__text::after { content: " ← 내가 고른 답"; font-size: 0.82rem; color: var(--danger); font-weight: 700; }
+
+.choice.is-picked { border-color: var(--brand); background: var(--brand-soft); }
+
+.choice:disabled:not(.is-answer):not(.is-wrong):not(.is-picked) { opacity: 0.5; }
+
+/* 주관식 입력 */
+.short-answer { display: flex; gap: 8px; margin-bottom: 4px; }
+.short-answer input {
+  flex: 1; min-width: 0;
+  padding: 11px 14px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 11px;
+  background: var(--bg);
+  font-size: 0.94rem;
+}
+.short-answer input:disabled { opacity: 1; }
+.short-answer input.is-correct { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.short-answer input.is-wrong { border-color: var(--danger); background: var(--danger-soft); }
+.short-answer .btn { flex: none; }
+
+/* 판정 띠 */
+.verdict {
+  margin-top: 12px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem; font-weight: 700;
+}
+.verdict--correct { background: var(--accent-soft); color: var(--accent); }
+.verdict--wrong { background: var(--danger-soft); color: var(--danger); }
+.verdict--neutral { background: var(--bg-subtle); color: var(--text-muted); }
+.verdict[hidden] { display: none; }
+
+/* 직접 채점 */
+.self-check {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 9px;
+  font-size: 0.86rem; color: var(--text-muted);
+}
+
+/* 다시 풀기 */
+.retry-btn {
+  margin-top: 12px;
+  background: none; border: none; padding: 0;
+  color: var(--text-faint); font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; text-decoration: underline;
+}
+.retry-btn:hover { color: var(--brand); }
+.retry-btn[hidden] { display: none; }
+
+/* 채점이 끝난 카드는 살짝 가라앉힌다 */
+.quiz-card.is-answered { border-color: var(--border); }
+.quiz-card.is-answered .answer-toggle { display: none; }
+
+/* 모바일 */
+@media (max-width: 680px) {
+  .short-answer { flex-direction: column; }
+  .short-answer .btn { width: 100%; }
+  .choice { padding: 11px 13px; font-size: 0.92rem; }
+}
+
+/* 인쇄할 때는 풀이 UI를 숨기고 정답만 남긴다 */
+@media print {
+  .score-bar, .retry-btn, .self-check, .short-answer .btn { display: none !important; }
+}
